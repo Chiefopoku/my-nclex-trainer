@@ -12,6 +12,8 @@ interface Scenario {
   vitals: Record<string, unknown>;
   labs: Record<string, unknown> | null;
   client_type: string;
+  client_needs_category?: string | null;
+  content_area?: string | null;
 }
 
 interface QuestionOption {
@@ -39,6 +41,24 @@ interface EvaluationResult {
 
 const DEMO_STUDENT_ID = '00000000-0000-0000-0000-000000000001';
 
+const CONTENT_AREA_OPTIONS = [
+  'Cardiovascular',
+  'Respiratory',
+  'Neurological',
+  'Endocrine',
+  'OB / Maternity',
+  'Therapeutic Communication',
+];
+
+const NCJMM_OPTIONS = [
+  'Recognize Cues',
+  'Analyze Cues',
+  'Prioritize Hypotheses',
+  'Generate Solutions',
+  'Take Action',
+  'Evaluate Outcomes',
+];
+
 function demoQuestionToQuestion(q: DemoQuestion): Question {
   return {
     id: q.id,
@@ -55,6 +75,8 @@ function demoQuestionToQuestion(q: DemoQuestion): Question {
       vitals: q.scenario.vitals as Record<string, unknown>,
       labs: (q.scenario.labs ?? null) as Record<string, unknown> | null,
       client_type: q.scenario.client_type,
+      client_needs_category: q.scenario.client_needs_category,
+      content_area: q.scenario.content_area,
     },
   };
 }
@@ -83,13 +105,32 @@ export default function DashboardPage() {
   const [result, setResult] = useState<EvaluationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const pickDemoQuestion = useCallback(() => {
-    const next = DEMO_QUESTIONS[Math.floor(Math.random() * DEMO_QUESTIONS.length)];
-    setDemoQuestion(next);
-    setQuestion(demoQuestionToQuestion(next));
-    setDemoMode(true);
-    setLoadingQuestion(false);
-  }, []);
+  const [contentFilter, setContentFilter] = useState<string>('');
+  const [ncjmmFilter, setNcjmmFilter] = useState<string>('');
+  const [generating, setGenerating] = useState(false);
+
+  const pickDemoQuestion = useCallback(
+    (content: string, ncjmm: string) => {
+      const pool = DEMO_QUESTIONS.filter(
+        (q) =>
+          (content === '' || q.scenario.content_area === content) &&
+          (ncjmm === '' || q.ncjmm_category === ncjmm)
+      );
+      if (pool.length === 0) {
+        setQuestion(null);
+        setDemoQuestion(null);
+        setError('No questions match this filter. Try clearing one.');
+        setLoadingQuestion(false);
+        return;
+      }
+      const next = pool[Math.floor(Math.random() * pool.length)];
+      setDemoQuestion(next);
+      setQuestion(demoQuestionToQuestion(next));
+      setDemoMode(true);
+      setLoadingQuestion(false);
+    },
+    []
+  );
 
   const loadNextQuestion = useCallback(async () => {
     setLoadingQuestion(true);
@@ -98,20 +139,40 @@ export default function DashboardPage() {
 
     const supabase = getSupabaseClient();
     if (!supabase) {
-      pickDemoQuestion();
+      pickDemoQuestion(contentFilter, ncjmmFilter);
       return;
     }
 
-    const { data, error: qError } = await supabase
+    // For content_area (lives on clinical_scenarios) we need an inner join + filter on the
+    // embedded resource. PostgREST supports that with !inner and the embed.column path.
+    const useInner = Boolean(contentFilter);
+    let query = supabase
       .from('questions')
-      .select('*, clinical_scenarios(*)')
-      .limit(20);
+      .select(
+        useInner ? '*, clinical_scenarios!inner(*)' : '*, clinical_scenarios(*)'
+      );
 
-    if (qError || !data || data.length === 0) {
-      pickDemoQuestion();
-      if (qError) {
-        setError(`Showing demo question. Supabase error: ${qError.message}`);
-      }
+    if (contentFilter) {
+      query = query.eq('clinical_scenarios.content_area', contentFilter);
+    }
+    if (ncjmmFilter) {
+      query = query.eq('ncjmm_category', ncjmmFilter);
+    }
+
+    const { data, error: qError } = await query.limit(40);
+
+    if (qError) {
+      pickDemoQuestion(contentFilter, ncjmmFilter);
+      setError(`Showing demo question. Supabase error: ${qError.message}`);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      setQuestion(null);
+      setDemoQuestion(null);
+      setDemoMode(false);
+      setLoadingQuestion(false);
+      setError('No questions match this filter. Try clearing one.');
       return;
     }
 
@@ -120,11 +181,64 @@ export default function DashboardPage() {
     setDemoQuestion(null);
     setDemoMode(false);
     setLoadingQuestion(false);
-  }, [pickDemoQuestion]);
+  }, [contentFilter, ncjmmFilter, pickDemoQuestion]);
 
   useEffect(() => {
     loadNextQuestion();
   }, [loadNextQuestion]);
+
+  const handleGenerate = async () => {
+    if (!contentFilter || !ncjmmFilter) {
+      setError('Pick a content area and an NCJMM step before generating.');
+      return;
+    }
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setError('Supabase is required to generate new scenarios.');
+      return;
+    }
+
+    setGenerating(true);
+    setResult(null);
+    setError(null);
+
+    const { data, error: fnError } = await supabase.functions.invoke(
+      'generate-scenario',
+      {
+        body: { contentArea: contentFilter, ncjmmCategory: ncjmmFilter },
+      }
+    );
+
+    if (fnError) {
+      setError(`Generation failed: ${fnError.message}`);
+      setGenerating(false);
+      return;
+    }
+
+    const newId = (data as { questionId?: string })?.questionId;
+    if (!newId) {
+      setError('Generation returned no question id.');
+      setGenerating(false);
+      return;
+    }
+
+    const { data: row, error: qError } = await supabase
+      .from('questions')
+      .select('*, clinical_scenarios(*)')
+      .eq('id', newId)
+      .single();
+
+    if (qError || !row) {
+      setError(qError?.message ?? 'Could not load the generated question.');
+      setGenerating(false);
+      return;
+    }
+
+    setQuestion(row as Question);
+    setDemoQuestion(null);
+    setDemoMode(false);
+    setGenerating(false);
+  };
 
   const handleSubmit = async (selectedIds: string[]) => {
     if (!question) return;
@@ -160,6 +274,15 @@ export default function DashboardPage() {
       const isCorrect =
         correct.length === selectedIds.length &&
         correct.every((id) => selectedIds.includes(id));
+
+      // Still log the response so /progress can count it, even without AI rationale.
+      await supabase.from('student_responses').insert({
+        student_id: DEMO_STUDENT_ID,
+        question_id: question.id,
+        selected_option_ids: selectedIds,
+        is_correct: isCorrect,
+      });
+
       setResult({
         isCorrect,
         personalizedRationale: isCorrect
@@ -176,35 +299,79 @@ export default function DashboardPage() {
 
   return (
     <main className="flex flex-1 flex-col items-center px-4 py-10 gap-6">
-      <div className="max-w-2xl w-full flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Clinical Judgment Practice</h1>
-        <button
-          onClick={loadNextQuestion}
-          disabled={loadingQuestion || submitting}
-          className="text-sm text-blue-600 hover:text-blue-800 font-medium disabled:text-gray-400"
-        >
-          Next Scenario →
-        </button>
+      <div className="max-w-2xl w-full flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            Clinical Judgment Practice
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            One scenario at a time — pick the safest action.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <button
+            onClick={handleGenerate}
+            disabled={
+              generating || loadingQuestion || submitting || demoMode ||
+              !contentFilter || !ncjmmFilter
+            }
+            title={
+              demoMode
+                ? 'Connect Supabase to generate scenarios.'
+                : !contentFilter || !ncjmmFilter
+                  ? 'Pick a content area and an NCJMM step first.'
+                  : 'Have the AI write you a fresh scenario.'
+            }
+            className="text-sm font-medium px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:border-stone-200 disabled:bg-stone-50 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
+          >
+            {generating ? 'Generating…' : '✨ Generate'}
+          </button>
+          <button
+            onClick={loadNextQuestion}
+            disabled={loadingQuestion || submitting || generating}
+            className="text-sm text-indigo-700 hover:text-indigo-900 font-medium disabled:text-slate-400 flex items-center gap-1"
+          >
+            Next Scenario
+            <span aria-hidden>→</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-2xl w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FilterSelect
+          label="Content area"
+          value={contentFilter}
+          options={CONTENT_AREA_OPTIONS}
+          onChange={setContentFilter}
+        />
+        <FilterSelect
+          label="NCJMM step"
+          value={ncjmmFilter}
+          options={NCJMM_OPTIONS}
+          onChange={setNcjmmFilter}
+        />
       </div>
 
       {demoMode && (
-        <div className="max-w-2xl w-full bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-3 text-sm">
+        <div className="max-w-2xl w-full bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-sm">
           <strong>Demo mode.</strong> You&apos;re seeing built-in scenarios with canned rationales.
           To get the AI preceptor and adaptive scoring, connect Supabase (set{' '}
-          <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> in{' '}
-          <code>.env.local</code>, run <code>schema.sql</code> + <code>seed.sql</code>, and deploy
-          the edge function).
+          <code className="px-1 py-0.5 rounded bg-amber-100">NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
+          <code className="px-1 py-0.5 rounded bg-amber-100">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> in{' '}
+          <code className="px-1 py-0.5 rounded bg-amber-100">.env.local</code>, run{' '}
+          <code className="px-1 py-0.5 rounded bg-amber-100">schema.sql</code> +{' '}
+          <code className="px-1 py-0.5 rounded bg-amber-100">seed.sql</code>, and deploy the edge function).
         </div>
       )}
 
       {error && (
-        <div className="max-w-2xl w-full bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 text-sm">
+        <div className="max-w-2xl w-full bg-rose-50 border border-rose-200 text-rose-900 rounded-xl p-4 text-sm">
           {error}
         </div>
       )}
 
       {loadingQuestion && (
-        <div className="max-w-2xl w-full bg-white border border-gray-100 rounded-xl p-6 text-gray-500">
+        <div className="max-w-2xl w-full bg-white border border-stone-200 rounded-2xl p-6 text-slate-500">
           Loading scenario…
         </div>
       )}
@@ -220,10 +387,11 @@ export default function DashboardPage() {
 
           <div className="max-w-2xl w-full">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                NCJMM Step:
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                NCJMM Step
               </span>
-              <span className="text-xs font-semibold text-gray-800">
+              <span className="w-1 h-1 rounded-full bg-slate-300" />
+              <span className="text-xs font-semibold text-indigo-700">
                 {question.ncjmm_category}
               </span>
             </div>
@@ -239,27 +407,36 @@ export default function DashboardPage() {
 
           {result && (
             <div
-              className={`max-w-2xl w-full rounded-xl border p-6 ${
+              className={`max-w-2xl w-full rounded-2xl border p-6 shadow-sm ${
                 result.isCorrect
-                  ? 'bg-green-50 border-green-200'
+                  ? 'bg-emerald-50 border-emerald-200'
                   : 'bg-amber-50 border-amber-200'
               }`}
             >
-              <h3
-                className={`text-lg font-bold mb-2 ${
-                  result.isCorrect ? 'text-green-900' : 'text-amber-900'
-                }`}
-              >
-                {result.isCorrect ? 'Correct — well done.' : 'Not quite.'}
-              </h3>
-              <p className="text-gray-800 mb-3 leading-relaxed">
+              <div className="flex items-center gap-2 mb-3">
+                <span
+                  className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-sm ${
+                    result.isCorrect ? 'bg-emerald-600' : 'bg-amber-600'
+                  }`}
+                >
+                  {result.isCorrect ? '✓' : '!'}
+                </span>
+                <h3
+                  className={`text-lg font-semibold tracking-tight ${
+                    result.isCorrect ? 'text-emerald-900' : 'text-amber-900'
+                  }`}
+                >
+                  {result.isCorrect ? 'Correct — well done.' : 'Not quite.'}
+                </h3>
+              </div>
+              <p className="text-slate-800 mb-4 leading-relaxed">
                 {result.personalizedRationale}
               </p>
-              <div className="border-t border-black/10 pt-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+              <div className="border-t border-black/5 pt-3">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
                   Clinical Insight
                 </div>
-                <p className="text-gray-700 text-sm leading-relaxed">
+                <p className="text-slate-700 text-sm leading-relaxed">
                   {result.clinicalInsight}
                 </p>
               </div>
@@ -268,5 +445,37 @@ export default function DashboardPage() {
         </>
       )}
     </main>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="flex flex-col text-sm">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">
+        {label}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 cursor-pointer"
+      >
+        <option value="">All</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

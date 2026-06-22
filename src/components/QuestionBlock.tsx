@@ -38,16 +38,17 @@ export default function QuestionBlock({
   return (
     <div
       key={questionId}
-      className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 max-w-2xl w-full"
+      className="bg-white border border-stone-200 rounded-2xl shadow-sm p-6 max-w-2xl w-full"
     >
-      <h3 className="text-lg font-semibold text-gray-800 mb-1">{questionText}</h3>
-      {multiSelect && (
-        <p className="text-xs text-gray-500 mb-4">
-          Select all that apply.
-        </p>
+      <h3 className="text-lg font-semibold text-slate-900 leading-snug mb-1 tracking-tight">
+        {questionText}
+      </h3>
+      {multiSelect ? (
+        <p className="text-xs text-slate-500 mb-5">Select all that apply.</p>
+      ) : (
+        <div className="mb-5" />
       )}
-      {!multiSelect && <div className="mb-4" />}
-      <div className="space-y-3 mb-6">
+      <div className="space-y-2.5 mb-6">
         {options.map((option) => {
           const isSelected = selected.includes(option.id);
           return (
@@ -55,13 +56,22 @@ export default function QuestionBlock({
               key={option.id}
               onClick={() => toggle(option.id)}
               disabled={isLoading}
-              className={`w-full text-left p-4 rounded-lg border transition-all ${
+              className={`w-full text-left p-4 rounded-xl border transition-all flex gap-3 items-start ${
                 isSelected
-                  ? 'border-blue-600 bg-blue-50 text-blue-900 font-medium'
-                  : 'border-gray-200 hover:border-gray-300 bg-gray-50 text-gray-700'
+                  ? 'border-indigo-500 bg-indigo-50 text-slate-900 ring-2 ring-indigo-500/20'
+                  : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-slate-700'
               }`}
             >
-              <span className="font-bold mr-2">{option.id}.</span> {option.text}
+              <span
+                className={`flex-shrink-0 w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-stone-100 text-slate-700'
+                }`}
+              >
+                {option.id}
+              </span>
+              <span className="leading-relaxed">{option.text}</span>
             </button>
           );
         })}
@@ -69,9 +79,9 @@ export default function QuestionBlock({
       <button
         onClick={() => selected.length > 0 && onSubmit(selected)}
         disabled={selected.length === 0 || isLoading}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-xl shadow-sm shadow-indigo-600/20 disabled:bg-stone-200 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed transition-colors"
       >
-        {isLoading ? 'Evaluating with AI Coach...' : 'Submit Answer'}
+        {isLoading ? 'Evaluating with AI Coach…' : 'Submit Answer'}
       </button>
     </div>
   );

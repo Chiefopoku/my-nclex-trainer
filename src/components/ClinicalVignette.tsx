@@ -24,36 +24,41 @@ export default function ClinicalVignette({
   const labEntries = labs ? Object.entries(labs) : [];
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 max-w-2xl w-full">
-      <span className="inline-block bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1 rounded mb-3">
-        {clientType}
-      </span>
-      <h2 className="text-xl font-bold text-gray-900 mb-3">Clinical Scenario</h2>
-      <p className="text-gray-700 leading-relaxed mb-5 whitespace-pre-wrap">{vignette}</p>
+    <div className="bg-white border border-stone-200 rounded-2xl shadow-sm max-w-2xl w-full overflow-hidden">
+      <div className="px-6 pt-6">
+        <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-800 text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+          {clientType}
+        </span>
+        <h2 className="text-xl font-semibold text-slate-900 mb-3 tracking-tight">
+          Clinical Scenario
+        </h2>
+        <p className="text-slate-700 leading-relaxed mb-5 whitespace-pre-wrap">{vignette}</p>
+      </div>
 
-      <div className="border-t border-gray-100 pt-4">
-        <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-2">
+      <div className="border-t border-stone-100 bg-stone-50/60 px-6 py-5">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
           Vital Signs
         </h4>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {vitalEntries.map(([key, value]) => (
-            <div key={key} className="bg-gray-50 rounded-lg p-3">
-              <div className="text-xs text-gray-500">{key}</div>
-              <div className="text-sm font-semibold text-gray-900">{String(value)}</div>
+            <div key={key} className="bg-white border border-stone-200 rounded-lg px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500">{key}</div>
+              <div className="text-sm font-semibold text-slate-900">{String(value)}</div>
             </div>
           ))}
         </div>
 
         {labEntries.length > 0 && (
           <>
-            <h4 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mt-5 mb-3">
               Labs
             </h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {labEntries.map(([key, value]) => (
-                <div key={key} className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-xs text-gray-500">{key}</div>
-                  <div className="text-sm font-semibold text-gray-900">{String(value)}</div>
+                <div key={key} className="bg-white border border-stone-200 rounded-lg px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wide text-slate-500">{key}</div>
+                  <div className="text-sm font-semibold text-slate-900">{String(value)}</div>
                 </div>
               ))}
             </div>

@@ -88,6 +88,8 @@ export interface DemoQuestion {
     vitals: Record<string, string | number>;
     labs?: Record<string, string>;
     client_type: string;
+    client_needs_category: string;
+    content_area: string;
   };
   question_text: string;
   question_type: 'multiple_choice' | 'select_all';
@@ -110,6 +112,8 @@ export const DEMO_QUESTIONS: DemoQuestion[] = [
       vitals: { BP: '158/92', HR: 104, RR: 24, SpO2: '89% on RA', Temp: '98.6 F' },
       labs: { BNP: '1240 pg/mL', 'K+': '3.4 mEq/L' },
       client_type: 'Adult Med-Surg',
+      client_needs_category: 'Physiological Integrity',
+      content_area: 'Cardiovascular',
     },
     question_text: 'Which finding is the priority concern for the nurse to address first?',
     question_type: 'multiple_choice',
@@ -137,6 +141,8 @@ export const DEMO_QUESTIONS: DemoQuestion[] = [
         'A 16-year-old with a history of asthma arrives in the ED after using their rescue inhaler four times in the last hour with no relief. The client appears anxious, sits leaning forward, and uses accessory muscles to breathe. On auscultation, breath sounds are markedly diminished with minimal wheezing.',
       vitals: { BP: '118/74', HR: 132, RR: 30, SpO2: '87% on RA', Temp: '98.2 F' },
       client_type: 'Pediatric',
+      client_needs_category: 'Physiological Integrity',
+      content_area: 'Respiratory',
     },
     question_text:
       'How should the nurse interpret the diminished breath sounds and minimal wheezing?',
@@ -166,6 +172,8 @@ export const DEMO_QUESTIONS: DemoQuestion[] = [
       vitals: { BP: '148/96', HR: 78, RR: 10, SpO2: '94% on RA', Temp: '98.4 F' },
       labs: { Mg: '9.5 mg/dL', 'Urine output': '20 mL/hr' },
       client_type: 'Maternity',
+      client_needs_category: 'Physiological Integrity',
+      content_area: 'OB / Maternity',
     },
     question_text: "What is the nurse's first action?",
     question_type: 'multiple_choice',
@@ -194,6 +202,8 @@ export const DEMO_QUESTIONS: DemoQuestion[] = [
       vitals: { BP: '168/72', HR: 52, RR: '10, irregular', SpO2: '96%', Temp: '99.1 F' },
       labs: { GCS: '9 (was 12)' },
       client_type: 'Adult Med-Surg',
+      client_needs_category: 'Physiological Integrity',
+      content_area: 'Neurological',
     },
     question_text: 'Which set of findings suggests rising intracranial pressure?',
     question_type: 'multiple_choice',
@@ -228,6 +238,8 @@ export const DEMO_QUESTIONS: DemoQuestion[] = [
         Ketones: 'large',
       },
       client_type: 'Adult Med-Surg',
+      client_needs_category: 'Physiological Integrity',
+      content_area: 'Endocrine',
     },
     question_text:
       'Select all interventions the nurse anticipates in the initial management of DKA.',
@@ -257,6 +269,8 @@ export const DEMO_QUESTIONS: DemoQuestion[] = [
         'A 45-year-old client newly diagnosed with breast cancer sits quietly with arms crossed. She tells the nurse, "I don\'t even know how to tell my kids. I feel like my whole world just stopped."',
       vitals: { BP: '126/78', HR: 86, RR: 16, SpO2: '98%', Temp: '98.6 F' },
       client_type: 'Mental Health',
+      client_needs_category: 'Psychosocial Integrity',
+      content_area: 'Therapeutic Communication',
     },
     question_text: 'Which response by the nurse is most therapeutic?',
     question_type: 'multiple_choice',
