@@ -155,7 +155,19 @@ export default function DashboardPage() {
     );
 
     if (fnError) {
-      setError(fnError.message);
+      // Edge function not deployed (or errored) — grade locally so the UI still works.
+      const correct = question.correct_option_ids ?? [];
+      const isCorrect =
+        correct.length === selectedIds.length &&
+        correct.every((id) => selectedIds.includes(id));
+      setResult({
+        isCorrect,
+        personalizedRationale: isCorrect
+          ? 'Correct.'
+          : `Not quite. The correct answer was ${correct.join(', ')}.`,
+        clinicalInsight:
+          'AI rationale unavailable — deploy the evaluate-clinical-choice edge function and set OPENAI_API_KEY to enable preceptor feedback.',
+      });
     } else {
       setResult(data as EvaluationResult);
     }
