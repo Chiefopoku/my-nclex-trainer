@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: '/dashboard', label: 'Practice' },
-  { href: '/progress', label: 'Progress' },
-  { href: '/study', label: 'Cheat Sheet' },
-  { href: '/test-plan', label: 'Test Plan' },
+  { href: "/dashboard", label: "Practice" },
+  { href: "/progress", label: "Progress" },
+  { href: "/study", label: "Cheat Sheet" },
+  { href: "/test-plan", label: "Test Plan" },
 ];
 
 export default function NavHeader() {
@@ -26,15 +26,16 @@ export default function NavHeader() {
         </Link>
         <ul className="flex gap-0.5 sm:gap-1 text-sm">
           {LINKS.map((l) => {
-            const active = pathname === l.href || pathname?.startsWith(l.href + '/');
+            const active =
+              pathname === l.href || pathname?.startsWith(l.href + "/");
             return (
               <li key={l.href}>
                 <Link
                   href={l.href}
                   className={`px-3 py-1.5 rounded-full font-medium transition-colors ${
                     active
-                      ? 'bg-indigo-100 text-indigo-800'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-stone-100'
+                      ? "bg-indigo-100 text-indigo-800"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-stone-100"
                   }`}
                 >
                   {l.label}

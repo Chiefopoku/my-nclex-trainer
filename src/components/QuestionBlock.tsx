@@ -1,5 +1,5 @@
-'use client';
-import { useState } from 'react';
+"use client";
+import { useState } from "react";
 
 interface Option {
   id: string;
@@ -28,7 +28,7 @@ export default function QuestionBlock({
   const toggle = (id: string) => {
     if (multiSelect) {
       setSelected((cur) =>
-        cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+        cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
       );
     } else {
       setSelected([id]);
@@ -58,15 +58,15 @@ export default function QuestionBlock({
               disabled={isLoading}
               className={`w-full text-left p-4 rounded-xl border transition-all flex gap-3 items-start ${
                 isSelected
-                  ? 'border-indigo-500 bg-indigo-50 text-slate-900 ring-2 ring-indigo-500/20'
-                  : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-slate-700'
+                  ? "border-indigo-500 bg-indigo-50 text-slate-900 ring-2 ring-indigo-500/20"
+                  : "border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-slate-700"
               }`}
             >
               <span
                 className={`flex-shrink-0 w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center transition-colors ${
                   isSelected
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-stone-100 text-slate-700'
+                    ? "bg-indigo-600 text-white"
+                    : "bg-stone-100 text-slate-700"
                 }`}
               >
                 {option.id}
@@ -81,7 +81,7 @@ export default function QuestionBlock({
         disabled={selected.length === 0 || isLoading}
         className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-xl shadow-sm shadow-indigo-600/20 disabled:bg-stone-200 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed transition-colors"
       >
-        {isLoading ? 'Evaluating with AI Coach…' : 'Submit Answer'}
+        {isLoading ? "Evaluating with AI Coach…" : "Submit Answer"}
       </button>
     </div>
   );

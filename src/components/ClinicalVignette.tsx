@@ -33,7 +33,9 @@ export default function ClinicalVignette({
         <h2 className="text-xl font-semibold text-slate-900 mb-3 tracking-tight">
           Clinical Scenario
         </h2>
-        <p className="text-slate-700 leading-relaxed mb-5 whitespace-pre-wrap">{vignette}</p>
+        <p className="text-slate-700 leading-relaxed mb-5 whitespace-pre-wrap">
+          {vignette}
+        </p>
       </div>
 
       <div className="border-t border-stone-100 bg-stone-50/60 px-6 py-5">
@@ -42,9 +44,16 @@ export default function ClinicalVignette({
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {vitalEntries.map(([key, value]) => (
-            <div key={key} className="bg-white border border-stone-200 rounded-lg px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-slate-500">{key}</div>
-              <div className="text-sm font-semibold text-slate-900">{String(value)}</div>
+            <div
+              key={key}
+              className="bg-white border border-stone-200 rounded-lg px-3 py-2"
+            >
+              <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                {key}
+              </div>
+              <div className="text-sm font-semibold text-slate-900">
+                {String(value)}
+              </div>
             </div>
           ))}
         </div>
@@ -56,9 +65,16 @@ export default function ClinicalVignette({
             </h4>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {labEntries.map(([key, value]) => (
-                <div key={key} className="bg-white border border-stone-200 rounded-lg px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wide text-slate-500">{key}</div>
-                  <div className="text-sm font-semibold text-slate-900">{String(value)}</div>
+                <div
+                  key={key}
+                  className="bg-white border border-stone-200 rounded-lg px-3 py-2"
+                >
+                  <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                    {key}
+                  </div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    {String(value)}
+                  </div>
                 </div>
               ))}
             </div>
