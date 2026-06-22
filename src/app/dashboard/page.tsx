@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
-import { getSupabaseClient } from '@/utils/supabaseClient';
-import { DEMO_QUESTIONS, type DemoQuestion } from '@/utils/demoData';
-import ClinicalVignette from '@/components/ClinicalVignette';
-import QuestionBlock from '@/components/QuestionBlock';
+import { useCallback, useEffect, useState } from "react";
+import { getSupabaseClient } from "@/utils/supabaseClient";
+import { DEMO_QUESTIONS, type DemoQuestion } from "@/utils/demoData";
+import ClinicalVignette from "@/components/ClinicalVignette";
+import QuestionBlock from "@/components/QuestionBlock";
 
 interface Scenario {
   id: string;
@@ -39,24 +39,24 @@ interface EvaluationResult {
   clinicalInsight: string;
 }
 
-const DEMO_STUDENT_ID = '00000000-0000-0000-0000-000000000001';
+const DEMO_STUDENT_ID = "00000000-0000-0000-0000-000000000001";
 
 const CONTENT_AREA_OPTIONS = [
-  'Cardiovascular',
-  'Respiratory',
-  'Neurological',
-  'Endocrine',
-  'OB / Maternity',
-  'Therapeutic Communication',
+  "Cardiovascular",
+  "Respiratory",
+  "Neurological",
+  "Endocrine",
+  "OB / Maternity",
+  "Therapeutic Communication",
 ];
 
 const NCJMM_OPTIONS = [
-  'Recognize Cues',
-  'Analyze Cues',
-  'Prioritize Hypotheses',
-  'Generate Solutions',
-  'Take Action',
-  'Evaluate Outcomes',
+  "Recognize Cues",
+  "Analyze Cues",
+  "Prioritize Hypotheses",
+  "Generate Solutions",
+  "Take Action",
+  "Evaluate Outcomes",
 ];
 
 function demoQuestionToQuestion(q: DemoQuestion): Question {
@@ -83,7 +83,7 @@ function demoQuestionToQuestion(q: DemoQuestion): Question {
 
 function gradeDemoAnswer(
   q: DemoQuestion,
-  selectedIds: string[]
+  selectedIds: string[],
 ): EvaluationResult {
   const correct = q.correct_option_ids;
   const isCorrect =
@@ -91,7 +91,9 @@ function gradeDemoAnswer(
     correct.every((id) => selectedIds.includes(id));
   return {
     isCorrect,
-    personalizedRationale: isCorrect ? q.rationale.correct : q.rationale.incorrect,
+    personalizedRationale: isCorrect
+      ? q.rationale.correct
+      : q.rationale.incorrect,
     clinicalInsight: q.rationale.insight,
   };
 }
@@ -105,32 +107,29 @@ export default function DashboardPage() {
   const [result, setResult] = useState<EvaluationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [contentFilter, setContentFilter] = useState<string>('');
-  const [ncjmmFilter, setNcjmmFilter] = useState<string>('');
+  const [contentFilter, setContentFilter] = useState<string>("");
+  const [ncjmmFilter, setNcjmmFilter] = useState<string>("");
   const [generating, setGenerating] = useState(false);
 
-  const pickDemoQuestion = useCallback(
-    (content: string, ncjmm: string) => {
-      const pool = DEMO_QUESTIONS.filter(
-        (q) =>
-          (content === '' || q.scenario.content_area === content) &&
-          (ncjmm === '' || q.ncjmm_category === ncjmm)
-      );
-      if (pool.length === 0) {
-        setQuestion(null);
-        setDemoQuestion(null);
-        setError('No questions match this filter. Try clearing one.');
-        setLoadingQuestion(false);
-        return;
-      }
-      const next = pool[Math.floor(Math.random() * pool.length)];
-      setDemoQuestion(next);
-      setQuestion(demoQuestionToQuestion(next));
-      setDemoMode(true);
+  const pickDemoQuestion = useCallback((content: string, ncjmm: string) => {
+    const pool = DEMO_QUESTIONS.filter(
+      (q) =>
+        (content === "" || q.scenario.content_area === content) &&
+        (ncjmm === "" || q.ncjmm_category === ncjmm),
+    );
+    if (pool.length === 0) {
+      setQuestion(null);
+      setDemoQuestion(null);
+      setError("No questions match this filter. Try clearing one.");
       setLoadingQuestion(false);
-    },
-    []
-  );
+      return;
+    }
+    const next = pool[Math.floor(Math.random() * pool.length)];
+    setDemoQuestion(next);
+    setQuestion(demoQuestionToQuestion(next));
+    setDemoMode(true);
+    setLoadingQuestion(false);
+  }, []);
 
   const loadNextQuestion = useCallback(async () => {
     setLoadingQuestion(true);
@@ -147,16 +146,18 @@ export default function DashboardPage() {
     // embedded resource. PostgREST supports that with !inner and the embed.column path.
     const useInner = Boolean(contentFilter);
     let query = supabase
-      .from('questions')
+      .from("questions")
       .select(
-        useInner ? '*, clinical_scenarios!inner(*)' : '*, clinical_scenarios(*)'
+        useInner
+          ? "*, clinical_scenarios!inner(*)"
+          : "*, clinical_scenarios(*)",
       );
 
     if (contentFilter) {
-      query = query.eq('clinical_scenarios.content_area', contentFilter);
+      query = query.eq("clinical_scenarios.content_area", contentFilter);
     }
     if (ncjmmFilter) {
-      query = query.eq('ncjmm_category', ncjmmFilter);
+      query = query.eq("ncjmm_category", ncjmmFilter);
     }
 
     const { data, error: qError } = await query.limit(40);
@@ -172,7 +173,7 @@ export default function DashboardPage() {
       setDemoQuestion(null);
       setDemoMode(false);
       setLoadingQuestion(false);
-      setError('No questions match this filter. Try clearing one.');
+      setError("No questions match this filter. Try clearing one.");
       return;
     }
 
@@ -189,12 +190,12 @@ export default function DashboardPage() {
 
   const handleGenerate = async () => {
     if (!contentFilter || !ncjmmFilter) {
-      setError('Pick a content area and an NCJMM step before generating.');
+      setError("Pick a content area and an NCJMM step before generating.");
       return;
     }
     const supabase = getSupabaseClient();
     if (!supabase) {
-      setError('Supabase is required to generate new scenarios.');
+      setError("Supabase is required to generate new scenarios.");
       return;
     }
 
@@ -203,10 +204,10 @@ export default function DashboardPage() {
     setError(null);
 
     const { data, error: fnError } = await supabase.functions.invoke(
-      'generate-scenario',
+      "generate-scenario",
       {
         body: { contentArea: contentFilter, ncjmmCategory: ncjmmFilter },
-      }
+      },
     );
 
     if (fnError) {
@@ -217,19 +218,19 @@ export default function DashboardPage() {
 
     const newId = (data as { questionId?: string })?.questionId;
     if (!newId) {
-      setError('Generation returned no question id.');
+      setError("Generation returned no question id.");
       setGenerating(false);
       return;
     }
 
     const { data: row, error: qError } = await supabase
-      .from('questions')
-      .select('*, clinical_scenarios(*)')
-      .eq('id', newId)
+      .from("questions")
+      .select("*, clinical_scenarios(*)")
+      .eq("id", newId)
       .single();
 
     if (qError || !row) {
-      setError(qError?.message ?? 'Could not load the generated question.');
+      setError(qError?.message ?? "Could not load the generated question.");
       setGenerating(false);
       return;
     }
@@ -258,14 +259,14 @@ export default function DashboardPage() {
     }
 
     const { data, error: fnError } = await supabase.functions.invoke(
-      'evaluate-clinical-choice',
+      "evaluate-clinical-choice",
       {
         body: {
           studentId: DEMO_STUDENT_ID,
           questionId: question.id,
           selectedAnswerIds: selectedIds,
         },
-      }
+      },
     );
 
     if (fnError) {
@@ -276,7 +277,7 @@ export default function DashboardPage() {
         correct.every((id) => selectedIds.includes(id));
 
       // Still log the response so /progress can count it, even without AI rationale.
-      await supabase.from('student_responses').insert({
+      await supabase.from("student_responses").insert({
         student_id: DEMO_STUDENT_ID,
         question_id: question.id,
         selected_option_ids: selectedIds,
@@ -286,10 +287,10 @@ export default function DashboardPage() {
       setResult({
         isCorrect,
         personalizedRationale: isCorrect
-          ? 'Correct.'
-          : `Not quite. The correct answer was ${correct.join(', ')}.`,
+          ? "Correct."
+          : `Not quite. The correct answer was ${correct.join(", ")}.`,
         clinicalInsight:
-          'AI rationale unavailable — deploy the evaluate-clinical-choice edge function and set OPENAI_API_KEY to enable preceptor feedback.',
+          "AI rationale unavailable — deploy the evaluate-clinical-choice edge function and set OPENAI_API_KEY to enable preceptor feedback.",
       });
     } else {
       setResult(data as EvaluationResult);
@@ -312,19 +313,23 @@ export default function DashboardPage() {
           <button
             onClick={handleGenerate}
             disabled={
-              generating || loadingQuestion || submitting || demoMode ||
-              !contentFilter || !ncjmmFilter
+              generating ||
+              loadingQuestion ||
+              submitting ||
+              demoMode ||
+              !contentFilter ||
+              !ncjmmFilter
             }
             title={
               demoMode
-                ? 'Connect Supabase to generate scenarios.'
+                ? "Connect Supabase to generate scenarios."
                 : !contentFilter || !ncjmmFilter
-                  ? 'Pick a content area and an NCJMM step first.'
-                  : 'Have the AI write you a fresh scenario.'
+                  ? "Pick a content area and an NCJMM step first."
+                  : "Have the AI write you a fresh scenario."
             }
             className="text-sm font-medium px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:border-stone-200 disabled:bg-stone-50 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
           >
-            {generating ? 'Generating…' : '✨ Generate'}
+            {generating ? "Generating…" : "✨ Generate"}
           </button>
           <button
             onClick={loadNextQuestion}
@@ -354,13 +359,22 @@ export default function DashboardPage() {
 
       {demoMode && (
         <div className="max-w-2xl w-full bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-sm">
-          <strong>Demo mode.</strong> You&apos;re seeing built-in scenarios with canned rationales.
-          To get the AI preceptor and adaptive scoring, connect Supabase (set{' '}
-          <code className="px-1 py-0.5 rounded bg-amber-100">NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
-          <code className="px-1 py-0.5 rounded bg-amber-100">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> in{' '}
-          <code className="px-1 py-0.5 rounded bg-amber-100">.env.local</code>, run{' '}
-          <code className="px-1 py-0.5 rounded bg-amber-100">schema.sql</code> +{' '}
-          <code className="px-1 py-0.5 rounded bg-amber-100">seed.sql</code>, and deploy the edge function).
+          <strong>Demo mode.</strong> You&apos;re seeing built-in scenarios with
+          canned rationales. To get the AI preceptor and adaptive scoring,
+          connect Supabase (set{" "}
+          <code className="px-1 py-0.5 rounded bg-amber-100">
+            NEXT_PUBLIC_SUPABASE_URL
+          </code>{" "}
+          and{" "}
+          <code className="px-1 py-0.5 rounded bg-amber-100">
+            NEXT_PUBLIC_SUPABASE_ANON_KEY
+          </code>{" "}
+          in{" "}
+          <code className="px-1 py-0.5 rounded bg-amber-100">.env.local</code>,
+          run{" "}
+          <code className="px-1 py-0.5 rounded bg-amber-100">schema.sql</code> +{" "}
+          <code className="px-1 py-0.5 rounded bg-amber-100">seed.sql</code>,
+          and deploy the edge function).
         </div>
       )}
 
@@ -399,7 +413,7 @@ export default function DashboardPage() {
               questionId={question.id}
               questionText={question.question_text}
               options={question.options}
-              multiSelect={question.question_type === 'select_all'}
+              multiSelect={question.question_type === "select_all"}
               onSubmit={handleSubmit}
               isLoading={submitting}
             />
@@ -409,24 +423,24 @@ export default function DashboardPage() {
             <div
               className={`max-w-2xl w-full rounded-2xl border p-6 shadow-sm ${
                 result.isCorrect
-                  ? 'bg-emerald-50 border-emerald-200'
-                  : 'bg-amber-50 border-amber-200'
+                  ? "bg-emerald-50 border-emerald-200"
+                  : "bg-amber-50 border-amber-200"
               }`}
             >
               <div className="flex items-center gap-2 mb-3">
                 <span
                   className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-sm ${
-                    result.isCorrect ? 'bg-emerald-600' : 'bg-amber-600'
+                    result.isCorrect ? "bg-emerald-600" : "bg-amber-600"
                   }`}
                 >
-                  {result.isCorrect ? '✓' : '!'}
+                  {result.isCorrect ? "✓" : "!"}
                 </span>
                 <h3
                   className={`text-lg font-semibold tracking-tight ${
-                    result.isCorrect ? 'text-emerald-900' : 'text-amber-900'
+                    result.isCorrect ? "text-emerald-900" : "text-amber-900"
                   }`}
                 >
-                  {result.isCorrect ? 'Correct — well done.' : 'Not quite.'}
+                  {result.isCorrect ? "Correct — well done." : "Not quite."}
                 </h3>
               </div>
               <p className="text-slate-800 mb-4 leading-relaxed">

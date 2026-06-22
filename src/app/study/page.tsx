@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { getSupabaseClient } from '@/utils/supabaseClient';
-import { DEMO_STUDY_FACTS, type DemoStudyFact } from '@/utils/demoData';
+import { useEffect, useMemo, useState } from "react";
+import { getSupabaseClient } from "@/utils/supabaseClient";
+import { DEMO_STUDY_FACTS, type DemoStudyFact } from "@/utils/demoData";
 
 const CATEGORY_ORDER = [
-  'Golden Rules',
-  'NCJMM',
-  'Lab Values',
-  'Antidotes',
-  'Positions',
-  'Isolation',
-  'Communication',
+  "Golden Rules",
+  "NCJMM",
+  "Lab Values",
+  "Antidotes",
+  "Positions",
+  "Isolation",
+  "Communication",
 ];
 
 export default function StudyPage() {
   const [facts, setFacts] = useState<DemoStudyFact[] | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -28,13 +28,14 @@ export default function StudyPage() {
       return;
     }
     supabase
-      .from('study_facts')
-      .select('*')
+      .from("study_facts")
+      .select("*")
       .then(({ data, error: e }) => {
         if (e || !data || data.length === 0) {
           setFacts(DEMO_STUDY_FACTS);
           setDemoMode(true);
-          if (e) setError(`Showing baked-in facts. Supabase error: ${e.message}`);
+          if (e)
+            setError(`Showing baked-in facts. Supabase error: ${e.message}`);
         } else {
           setFacts(data as DemoStudyFact[]);
         }
@@ -50,7 +51,7 @@ export default function StudyPage() {
             f.title.toLowerCase().includes(q) ||
             f.body.toLowerCase().includes(q) ||
             f.category.toLowerCase().includes(q) ||
-            f.tags.some((t) => t.toLowerCase().includes(q))
+            f.tags.some((t) => t.toLowerCase().includes(q)),
         )
       : facts;
 
@@ -78,18 +79,28 @@ export default function StudyPage() {
             High-Yield Cheat Sheet
           </h1>
           <p className="text-slate-600 mt-1">
-            The facts you want cold on test day — labs, antidotes, positions, isolation, and clinical-judgment rules.
+            The facts you want cold on test day — labs, antidotes, positions,
+            isolation, and clinical-judgment rules.
           </p>
         </div>
 
         {demoMode && (
           <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-sm mb-4">
-            <strong>Demo mode.</strong> Connect Supabase (set{' '}
-            <code className="px-1 py-0.5 rounded bg-amber-100">NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
-            <code className="px-1 py-0.5 rounded bg-amber-100">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> in{' '}
-            <code className="px-1 py-0.5 rounded bg-amber-100">.env.local</code>, then run{' '}
-            <code className="px-1 py-0.5 rounded bg-amber-100">schema.sql</code> and{' '}
-            <code className="px-1 py-0.5 rounded bg-amber-100">seed.sql</code>) to manage facts in the database.
+            <strong>Demo mode.</strong> Connect Supabase (set{" "}
+            <code className="px-1 py-0.5 rounded bg-amber-100">
+              NEXT_PUBLIC_SUPABASE_URL
+            </code>{" "}
+            and{" "}
+            <code className="px-1 py-0.5 rounded bg-amber-100">
+              NEXT_PUBLIC_SUPABASE_ANON_KEY
+            </code>{" "}
+            in{" "}
+            <code className="px-1 py-0.5 rounded bg-amber-100">.env.local</code>
+            , then run{" "}
+            <code className="px-1 py-0.5 rounded bg-amber-100">schema.sql</code>{" "}
+            and{" "}
+            <code className="px-1 py-0.5 rounded bg-amber-100">seed.sql</code>)
+            to manage facts in the database.
           </div>
         )}
 
@@ -136,7 +147,9 @@ export default function StudyPage() {
                     <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-indigo-800 transition-colors">
                       {f.title}
                     </h3>
-                    <p className="text-sm text-slate-600 leading-relaxed">{f.body}</p>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      {f.body}
+                    </p>
                     {f.tags.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-1">
                         {f.tags.map((t) => (
