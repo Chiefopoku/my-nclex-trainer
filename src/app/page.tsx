@@ -1,20 +1,20 @@
-import Link from 'next/link';
+import Link from "next/link";
 
 const FEATURES = [
   {
-    title: 'AI preceptor',
-    body: 'Personalized rationale on every answer — why your choice was right or wrong, and what to remember.',
-    accent: 'from-indigo-500/10 to-indigo-500/0',
+    title: "AI preceptor",
+    body: "Personalized rationale on every answer — why your choice was right or wrong, and what to remember.",
+    accent: "from-indigo-500/10 to-indigo-500/0",
   },
   {
-    title: 'NCJMM-aligned',
-    body: 'Questions tagged to each of the six clinical-judgment steps so you can practice the ones you fumble.',
-    accent: 'from-emerald-500/10 to-emerald-500/0',
+    title: "NCJMM-aligned",
+    body: "Questions tagged to each of the six clinical-judgment steps so you can practice the ones you fumble.",
+    accent: "from-emerald-500/10 to-emerald-500/0",
   },
   {
-    title: 'High-yield cheat sheet',
-    body: 'Lab values, antidotes, positions, isolation — searchable, on tap.',
-    accent: 'from-amber-500/10 to-amber-500/0',
+    title: "High-yield cheat sheet",
+    body: "Lab values, antidotes, positions, isolation — searchable, on tap.",
+    accent: "from-amber-500/10 to-amber-500/0",
   },
 ];
 
@@ -32,7 +32,7 @@ export default function Home() {
             NCLEX Adaptive Trainer
           </span>
           <h1 className="text-4xl sm:text-6xl font-bold text-slate-900 leading-[1.05] tracking-tight mb-5">
-            Practice clinical judgment with{' '}
+            Practice clinical judgment with{" "}
             <span className="bg-gradient-to-br from-indigo-600 to-indigo-800 bg-clip-text text-transparent">
               an AI preceptor.
             </span>
@@ -72,7 +72,9 @@ export default function Home() {
               />
               <div className="relative">
                 <h3 className="font-semibold text-slate-900 mb-2">{f.title}</h3>
-                <p className="text-sm text-slate-600 leading-relaxed">{f.body}</p>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  {f.body}
+                </p>
               </div>
             </article>
           ))}
