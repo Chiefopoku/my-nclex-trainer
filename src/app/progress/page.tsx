@@ -2,9 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { getSupabaseClient } from "@/utils/supabaseClient";
-
-const DEMO_STUDENT_ID = "00000000-0000-0000-0000-000000000001";
+import { getSupabaseClient, getStudentId } from "@/utils/supabaseClient";
 
 interface RawResponse {
   is_correct: boolean;
@@ -49,16 +47,21 @@ export default function ProgressPage() {
       setUnconfigured(true);
       return;
     }
-    supabase
-      .from("student_responses")
-      .select(
-        "is_correct, questions(ncjmm_category, clinical_scenarios(client_needs_category, content_area))",
-      )
-      .eq("student_id", DEMO_STUDENT_ID)
-      .then(({ data, error: e }) => {
-        if (e) setError(e.message);
-        else setResponses((data ?? []) as unknown as RawResponse[]);
-      });
+    (async () => {
+      const studentId = await getStudentId();
+      if (!studentId) {
+        setUnconfigured(true);
+        return;
+      }
+      const { data, error: e } = await supabase
+        .from("student_responses")
+        .select(
+          "is_correct, questions(ncjmm_category, clinical_scenarios(client_needs_category, content_area))",
+        )
+        .eq("student_id", studentId);
+      if (e) setError("We couldn't load your progress right now. Please try again later.");
+      else setResponses((data ?? []) as unknown as RawResponse[]);
+    })();
   }, []);
 
   const stats = useMemo(() => {
@@ -89,10 +92,9 @@ export default function ProgressPage() {
             Your Progress
           </h1>
           <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 text-sm">
-            <strong>Demo mode.</strong> Progress only tracks once Supabase is
-            connected. Connect your project (see{" "}
-            <code className="px-1 py-0.5 rounded bg-amber-100">.env.local</code>
-            ) and the questions you answer will show up here.
+            <strong>Progress isn&apos;t available right now.</strong> You can still
+            practise and use the cheat sheet; your answers just won&apos;t be saved
+            in this session.
           </div>
         </div>
       </main>
@@ -107,7 +109,7 @@ export default function ProgressPage() {
         </h1>
         <p className="text-slate-600 mb-6">
           Accuracy by clinical-judgment step, Client Needs category, and content
-          area.
+          area. Progress is private to this browser.
         </p>
 
         {error && (

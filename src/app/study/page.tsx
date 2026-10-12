@@ -2,163 +2,172 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/utils/supabaseClient";
-import { DEMO_STUDY_FACTS, type DemoStudyFact } from "@/utils/demoData";
+import {
+  CHEAT_SHEET_CATEGORIES,
+  CHEAT_SHEET_FACTS,
+  type StudyFact,
+} from "@/utils/cheatSheet";
 
-const CATEGORY_ORDER = [
-  "Golden Rules",
-  "NCJMM",
-  "Lab Values",
-  "Antidotes",
-  "Positions",
-  "Isolation",
-  "Communication",
-];
+const key = (f: StudyFact) => `${f.category}::${f.title}`.toLowerCase();
 
 export default function StudyPage() {
-  const [facts, setFacts] = useState<DemoStudyFact[] | null>(null);
-  const [demoMode, setDemoMode] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [extraFacts, setExtraFacts] = useState<StudyFact[]>([]);
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string>("All");
 
+  // The curated sheet ships with the app; any extra facts added to the
+  // study_facts table in Supabase are merged in.
   useEffect(() => {
     const supabase = getSupabaseClient();
-    if (!supabase) {
-      setFacts(DEMO_STUDY_FACTS);
-      setDemoMode(true);
-      return;
-    }
+    if (!supabase) return;
     supabase
       .from("study_facts")
-      .select("*")
-      .then(({ data, error: e }) => {
-        if (e || !data || data.length === 0) {
-          setFacts(DEMO_STUDY_FACTS);
-          setDemoMode(true);
-          if (e)
-            setError(`Showing baked-in facts. Supabase error: ${e.message}`);
-        } else {
-          setFacts(data as DemoStudyFact[]);
+      .select("id, category, title, body, tags")
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const known = new Set(CHEAT_SHEET_FACTS.map(key));
+          setExtraFacts(
+            (data as unknown as StudyFact[])
+              .map((f) => ({ ...f, tags: f.tags ?? [] }))
+              .filter((f) => !known.has(key(f))),
+          );
         }
       });
   }, []);
 
-  const grouped = useMemo(() => {
-    if (!facts) return null;
-    const q = query.trim().toLowerCase();
-    const filtered = q
-      ? facts.filter(
-          (f) =>
-            f.title.toLowerCase().includes(q) ||
-            f.body.toLowerCase().includes(q) ||
-            f.category.toLowerCase().includes(q) ||
-            f.tags.some((t) => t.toLowerCase().includes(q)),
-        )
-      : facts;
+  const facts = useMemo(() => [...CHEAT_SHEET_FACTS, ...extraFacts], [extraFacts]);
 
-    const byCategory = new Map<string, DemoStudyFact[]>();
+  const categories = useMemo(() => {
+    const extra = Array.from(new Set(extraFacts.map((f) => f.category))).filter(
+      (c) => !CHEAT_SHEET_CATEGORIES.includes(c),
+    );
+    return [...CHEAT_SHEET_CATEGORIES, ...extra];
+  }, [extraFacts]);
+
+  const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = facts.filter((f) => {
+      if (category !== "All" && f.category !== category) return false;
+      if (!q) return true;
+      return (
+        f.title.toLowerCase().includes(q) ||
+        f.body.toLowerCase().includes(q) ||
+        f.category.toLowerCase().includes(q) ||
+        f.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    });
+    const byCategory = new Map<string, StudyFact[]>();
     for (const f of filtered) {
       const list = byCategory.get(f.category) ?? [];
       list.push(f);
       byCategory.set(f.category, list);
     }
-    return Array.from(byCategory.entries()).sort(([a], [b]) => {
-      const ai = CATEGORY_ORDER.indexOf(a);
-      const bi = CATEGORY_ORDER.indexOf(b);
-      if (ai === -1 && bi === -1) return a.localeCompare(b);
-      if (ai === -1) return 1;
-      if (bi === -1) return -1;
-      return ai - bi;
-    });
-  }, [facts, query]);
+    return categories
+      .filter((c) => byCategory.has(c))
+      .map((c) => [c, byCategory.get(c) as StudyFact[]] as const);
+  }, [facts, query, category, categories]);
+
+  const shown = grouped.reduce((n, [, items]) => n + items.length, 0);
 
   return (
     <main className="flex-1 px-4 py-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-            High-Yield Cheat Sheet
-          </h1>
-          <p className="text-slate-600 mt-1">
-            The facts you want cold on test day — labs, antidotes, positions,
-            isolation, and clinical-judgment rules.
-          </p>
-        </div>
-
-        {demoMode && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-sm mb-4">
-            <strong>Demo mode.</strong> Connect Supabase (set{" "}
-            <code className="px-1 py-0.5 rounded bg-amber-100">
-              NEXT_PUBLIC_SUPABASE_URL
-            </code>{" "}
-            and{" "}
-            <code className="px-1 py-0.5 rounded bg-amber-100">
-              NEXT_PUBLIC_SUPABASE_ANON_KEY
-            </code>{" "}
-            in{" "}
-            <code className="px-1 py-0.5 rounded bg-amber-100">.env.local</code>
-            , then run{" "}
-            <code className="px-1 py-0.5 rounded bg-amber-100">schema.sql</code>{" "}
-            and{" "}
-            <code className="px-1 py-0.5 rounded bg-amber-100">seed.sql</code>)
-            to manage facts in the database.
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">High-Yield Cheat Sheet</h1>
+            <p className="text-slate-600 mt-1 max-w-2xl">
+              {facts.length} facts across {categories.length} topics: strategy, labs, electrolytes,
+              ECG, pharmacology, systems, maternity, pediatrics and mental health.
+            </p>
           </div>
-        )}
-
-        <div className="relative max-w-md mb-6">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400"
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="print:hidden text-sm font-medium px-4 py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-slate-700 shadow-sm"
           >
-            ⌕
-          </span>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search facts (potassium, ICP, droplet…)"
-            className="w-full pl-8 pr-4 py-2.5 border border-stone-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
-          />
+            Print / save PDF
+          </button>
         </div>
 
-        {error && (
-          <div className="bg-rose-50 border border-rose-200 text-rose-900 rounded-xl p-4 text-sm mb-6">
-            {error}
+        <div className="sticky top-14 z-20 -mx-4 px-4 py-3 bg-stone-50/90 backdrop-blur print:hidden">
+          <div className="relative max-w-md mb-3">
+            <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+              ⌕
+            </span>
+            <label htmlFor="fact-search" className="sr-only">Search the cheat sheet</label>
+            <input
+              id="fact-search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search: potassium, -olol, droplet, VEAL CHOP…"
+              className="w-full pl-8 pr-4 py-2.5 border border-stone-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400"
+            />
           </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mb-1" role="tablist" aria-label="Topics">
+            {["All", ...categories].map((c) => (
+              <button
+                key={c}
+                type="button"
+                role="tab"
+                aria-selected={category === c}
+                onClick={() => setCategory(c)}
+                className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                  category === c
+                    ? "bg-indigo-600 border-indigo-600 text-white"
+                    : "bg-white border-stone-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-500 mt-3 mb-6">
+          Showing {shown} of {facts.length}. Reference ranges vary slightly between textbooks; on
+          the exam, always use the range given in the question.
+        </p>
+
+        {grouped.length === 0 && (
+          <p className="text-slate-500">No facts match that search. Try a shorter term.</p>
         )}
 
-        {!facts && <p className="text-slate-500">Loading cheat sheet…</p>}
-
-        {grouped && grouped.length === 0 && (
-          <p className="text-slate-500">No facts match that search.</p>
-        )}
-
-        <div className="space-y-8">
-          {grouped?.map(([category, items]) => (
-            <section key={category}>
-              <h2 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3">
-                {category}
+        <div className="space-y-10">
+          {grouped.map(([cat, items]) => (
+            <section key={cat} aria-labelledby={`cat-${cat}`} className="break-inside-avoid">
+              <h2
+                id={`cat-${cat}`}
+                className="text-[11px] font-bold uppercase tracking-widest text-indigo-700 mb-3 flex items-center gap-2"
+              >
+                {cat}
+                <span className="text-slate-400 font-semibold">{items.length}</span>
               </h2>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {items.map((f) => (
                   <article
                     key={f.id}
-                    className="group bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all"
+                    className="group bg-white border border-stone-200 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all break-inside-avoid"
                   >
                     <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-indigo-800 transition-colors">
                       {f.title}
                     </h3>
-                    <p className="text-sm text-slate-600 leading-relaxed">
-                      {f.body}
-                    </p>
+                    <p className="text-sm text-slate-600 leading-relaxed">{f.body}</p>
                     {f.tags.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-1">
                         {f.tags.map((t) => (
-                          <span
+                          <button
                             key={t}
-                            className="text-[10px] font-medium uppercase tracking-wider bg-stone-100 text-slate-600 rounded-full px-2 py-0.5"
+                            type="button"
+                            onClick={() => {
+                              setCategory("All");
+                              setQuery(t);
+                            }}
+                            className="text-[10px] font-medium uppercase tracking-wider bg-stone-100 hover:bg-indigo-100 hover:text-indigo-800 text-slate-600 rounded-full px-2 py-0.5 transition-colors"
+                            title={`Show everything tagged "${t}"`}
                           >
                             {t}
-                          </span>
+                          </button>
                         ))}
                       </div>
                     )}

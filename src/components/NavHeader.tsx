@@ -14,25 +14,31 @@ export default function NavHeader() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-30 bg-stone-50/80 backdrop-blur border-b border-stone-200">
-      <nav className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 group">
-          <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-            N
+    <header className="sticky top-0 z-30 bg-stone-50/80 backdrop-blur border-b border-stone-200 print:hidden">
+      <nav
+        aria-label="Main"
+        className="max-w-6xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2"
+      >
+        <Link href="/" className="flex items-center gap-2 group flex-shrink-0">
+          <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white shadow-sm">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
           </span>
-          <span className="font-semibold text-slate-900 tracking-tight group-hover:text-indigo-700 transition-colors">
+          <span className="hidden sm:inline font-semibold text-slate-900 tracking-tight group-hover:text-indigo-700 transition-colors">
             NCLEX Trainer
           </span>
+          <span className="sr-only sm:hidden">NCLEX Trainer home</span>
         </Link>
-        <ul className="flex gap-0.5 sm:gap-1 text-sm">
+        <ul className="flex gap-0.5 sm:gap-1 text-[13px] sm:text-sm overflow-x-auto">
           {LINKS.map((l) => {
-            const active =
-              pathname === l.href || pathname?.startsWith(l.href + "/");
+            const active = pathname === l.href || pathname?.startsWith(l.href + "/");
             return (
-              <li key={l.href}>
+              <li key={l.href} className="flex-shrink-0">
                 <Link
                   href={l.href}
-                  className={`px-3 py-1.5 rounded-full font-medium transition-colors ${
+                  aria-current={active ? "page" : undefined}
+                  className={`block px-2.5 sm:px-3 py-1.5 rounded-full font-medium transition-colors ${
                     active
                       ? "bg-indigo-100 text-indigo-800"
                       : "text-slate-600 hover:text-slate-900 hover:bg-stone-100"

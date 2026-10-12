@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getSupabaseClient } from "@/utils/supabaseClient";
+import { getSupabaseClient, getStudentId } from "@/utils/supabaseClient";
 import { DEMO_QUESTIONS, type DemoQuestion } from "@/utils/demoData";
 import ClinicalVignette from "@/components/ClinicalVignette";
 import QuestionBlock from "@/components/QuestionBlock";
@@ -37,9 +37,8 @@ interface EvaluationResult {
   isCorrect: boolean;
   personalizedRationale: string;
   clinicalInsight: string;
+  correctOptionIds: string[];
 }
-
-const DEMO_STUDENT_ID = "00000000-0000-0000-0000-000000000001";
 
 const CONTENT_AREA_OPTIONS = [
   "Cardiovascular",
@@ -58,6 +57,9 @@ const NCJMM_OPTIONS = [
   "Take Action",
   "Evaluate Outcomes",
 ];
+
+const sameSet = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((id) => b.includes(id));
 
 function demoQuestionToQuestion(q: DemoQuestion): Question {
   return {
@@ -81,20 +83,13 @@ function demoQuestionToQuestion(q: DemoQuestion): Question {
   };
 }
 
-function gradeDemoAnswer(
-  q: DemoQuestion,
-  selectedIds: string[],
-): EvaluationResult {
-  const correct = q.correct_option_ids;
-  const isCorrect =
-    correct.length === selectedIds.length &&
-    correct.every((id) => selectedIds.includes(id));
+function gradeDemoAnswer(q: DemoQuestion, selectedIds: string[]): EvaluationResult {
+  const isCorrect = sameSet(q.correct_option_ids, selectedIds);
   return {
     isCorrect,
-    personalizedRationale: isCorrect
-      ? q.rationale.correct
-      : q.rationale.incorrect,
+    personalizedRationale: isCorrect ? q.rationale.correct : q.rationale.incorrect,
     clinicalInsight: q.rationale.insight,
+    correctOptionIds: q.correct_option_ids,
   };
 }
 
@@ -106,6 +101,8 @@ export default function DashboardPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<EvaluationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [session, setSession] = useState({ answered: 0, correct: 0 });
 
   const [contentFilter, setContentFilter] = useState<string>("");
   const [ncjmmFilter, setNcjmmFilter] = useState<string>("");
@@ -135,6 +132,7 @@ export default function DashboardPage() {
     setLoadingQuestion(true);
     setResult(null);
     setError(null);
+    setNotice(null);
 
     const supabase = getSupabaseClient();
     if (!supabase) {
@@ -142,29 +140,20 @@ export default function DashboardPage() {
       return;
     }
 
-    // For content_area (lives on clinical_scenarios) we need an inner join + filter on the
-    // embedded resource. PostgREST supports that with !inner and the embed.column path.
+    // content_area lives on clinical_scenarios, so filter through an inner join.
     const useInner = Boolean(contentFilter);
     let query = supabase
       .from("questions")
-      .select(
-        useInner
-          ? "*, clinical_scenarios!inner(*)"
-          : "*, clinical_scenarios(*)",
-      );
+      .select(useInner ? "*, clinical_scenarios!inner(*)" : "*, clinical_scenarios(*)");
 
-    if (contentFilter) {
-      query = query.eq("clinical_scenarios.content_area", contentFilter);
-    }
-    if (ncjmmFilter) {
-      query = query.eq("ncjmm_category", ncjmmFilter);
-    }
+    if (contentFilter) query = query.eq("clinical_scenarios.content_area", contentFilter);
+    if (ncjmmFilter) query = query.eq("ncjmm_category", ncjmmFilter);
 
-    const { data, error: qError } = await query.limit(40);
+    const { data, error: qError } = await query.limit(60);
 
     if (qError) {
       pickDemoQuestion(contentFilter, ncjmmFilter);
-      setError(`Showing demo question. Supabase error: ${qError.message}`);
+      setNotice("We couldn't reach the question bank, so here's a built-in practice question.");
       return;
     }
 
@@ -173,20 +162,30 @@ export default function DashboardPage() {
       setDemoQuestion(null);
       setDemoMode(false);
       setLoadingQuestion(false);
-      setError("No questions match this filter. Try clearing one.");
+      setError("No questions match this filter yet. Try clearing one.");
       return;
     }
 
-    const next = data[Math.floor(Math.random() * data.length)] as Question;
-    setQuestion(next);
+    const rows = data as unknown as Question[];
+    const pool = rows.filter((q) => q.id !== question?.id);
+    const list = pool.length > 0 ? pool : rows;
+    setQuestion(list[Math.floor(Math.random() * list.length)]);
     setDemoQuestion(null);
     setDemoMode(false);
     setLoadingQuestion(false);
+    // question?.id is intentionally read without being a dependency: we only
+    // want to avoid repeating the current question, not reload when it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentFilter, ncjmmFilter, pickDemoQuestion]);
 
   useEffect(() => {
     loadNextQuestion();
   }, [loadNextQuestion]);
+
+  // Start the private guest session early so the first answer is saved.
+  useEffect(() => {
+    getStudentId();
+  }, []);
 
   const handleGenerate = async () => {
     if (!contentFilter || !ncjmmFilter) {
@@ -194,31 +193,23 @@ export default function DashboardPage() {
       return;
     }
     const supabase = getSupabaseClient();
-    if (!supabase) {
-      setError("Supabase is required to generate new scenarios.");
-      return;
-    }
+    if (!supabase) return;
 
     setGenerating(true);
     setResult(null);
     setError(null);
+    setNotice(null);
+    await getStudentId();
 
-    const { data, error: fnError } = await supabase.functions.invoke(
-      "generate-scenario",
-      {
-        body: { contentArea: contentFilter, ncjmmCategory: ncjmmFilter },
-      },
-    );
+    const { data, error: fnError } = await supabase.functions.invoke("generate-scenario", {
+      body: { contentArea: contentFilter, ncjmmCategory: ncjmmFilter },
+    });
 
-    if (fnError) {
-      setError(`Generation failed: ${fnError.message}`);
-      setGenerating(false);
-      return;
-    }
-
-    const newId = (data as { questionId?: string })?.questionId;
-    if (!newId) {
-      setError("Generation returned no question id.");
+    const newId = (data as { questionId?: string } | null)?.questionId;
+    if (fnError || !newId) {
+      setError(
+        "The AI couldn't write a new scenario right now (it may have hit its hourly limit). Try again later, or keep practising from the bank.",
+      );
       setGenerating(false);
       return;
     }
@@ -230,15 +221,20 @@ export default function DashboardPage() {
       .single();
 
     if (qError || !row) {
-      setError(qError?.message ?? "Could not load the generated question.");
+      setError("The new scenario was created but couldn't be loaded. Try Next scenario.");
       setGenerating(false);
       return;
     }
 
-    setQuestion(row as Question);
+    setQuestion(row as unknown as Question);
     setDemoQuestion(null);
     setDemoMode(false);
     setGenerating(false);
+  };
+
+  const recordResult = (r: EvaluationResult) => {
+    setResult(r);
+    setSession((s) => ({ answered: s.answered + 1, correct: s.correct + (r.isCorrect ? 1 : 0) }));
   };
 
   const handleSubmit = async (selectedIds: string[]) => {
@@ -247,7 +243,7 @@ export default function DashboardPage() {
     setError(null);
 
     if (demoMode && demoQuestion) {
-      setResult(gradeDemoAnswer(demoQuestion, selectedIds));
+      recordResult(gradeDemoAnswer(demoQuestion, selectedIds));
       setSubmitting(false);
       return;
     }
@@ -258,206 +254,196 @@ export default function DashboardPage() {
       return;
     }
 
-    const { data, error: fnError } = await supabase.functions.invoke(
-      "evaluate-clinical-choice",
-      {
-        body: {
-          studentId: DEMO_STUDENT_ID,
-          questionId: question.id,
-          selectedAnswerIds: selectedIds,
-        },
-      },
-    );
+    const studentId = await getStudentId();
+    const { data, error: fnError } = await supabase.functions.invoke("evaluate-clinical-choice", {
+      body: { questionId: question.id, selectedAnswerIds: selectedIds },
+    });
 
-    if (fnError) {
-      // Edge function not deployed (or errored) — grade locally so the UI still works.
-      const correct = question.correct_option_ids ?? [];
-      const isCorrect =
-        correct.length === selectedIds.length &&
-        correct.every((id) => selectedIds.includes(id));
+    const evaluated = data as Partial<EvaluationResult> | null;
+    if (!fnError && evaluated && typeof evaluated.isCorrect === "boolean") {
+      recordResult({
+        isCorrect: evaluated.isCorrect,
+        personalizedRationale: evaluated.personalizedRationale ?? "",
+        clinicalInsight: evaluated.clinicalInsight ?? "",
+        correctOptionIds: evaluated.correctOptionIds ?? question.correct_option_ids ?? [],
+      });
+      setSubmitting(false);
+      return;
+    }
 
-      // Still log the response so /progress can count it, even without AI rationale.
+    // AI preceptor unavailable: grade locally and still save the attempt.
+    const correct = question.correct_option_ids ?? [];
+    const isCorrect = sameSet(correct, selectedIds);
+    if (studentId) {
       await supabase.from("student_responses").insert({
-        student_id: DEMO_STUDENT_ID,
+        student_id: studentId,
         question_id: question.id,
         selected_option_ids: selectedIds,
         is_correct: isCorrect,
       });
-
-      setResult({
-        isCorrect,
-        personalizedRationale: isCorrect
-          ? "Correct."
-          : `Not quite. The correct answer was ${correct.join(", ")}.`,
-        clinicalInsight:
-          "AI rationale unavailable — deploy the evaluate-clinical-choice edge function and set OPENAI_API_KEY to enable preceptor feedback.",
-      });
-    } else {
-      setResult(data as EvaluationResult);
     }
+    const correctText = question.options
+      .filter((o) => correct.includes(o.id))
+      .map((o) => `${o.id}. ${o.text}`)
+      .join("; ");
+    recordResult({
+      isCorrect,
+      personalizedRationale: isCorrect
+        ? "Correct."
+        : `Not quite. The correct answer: ${correctText}.`,
+      clinicalInsight: "The AI preceptor's detailed rationale isn't available right now.",
+      correctOptionIds: correct,
+    });
     setSubmitting(false);
   };
 
+  const busy = loadingQuestion || submitting || generating;
+  const accuracy = session.answered ? Math.round((session.correct / session.answered) * 100) : 0;
+
   return (
-    <main className="flex flex-1 flex-col items-center px-4 py-10 gap-6">
-      <div className="max-w-2xl w-full flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Clinical Judgment Practice
-          </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            One scenario at a time — pick the safest action.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <button
-            onClick={handleGenerate}
-            disabled={
-              generating ||
-              loadingQuestion ||
-              submitting ||
-              demoMode ||
-              !contentFilter ||
-              !ncjmmFilter
-            }
-            title={
-              demoMode
-                ? "Connect Supabase to generate scenarios."
-                : !contentFilter || !ncjmmFilter
-                  ? "Pick a content area and an NCJMM step first."
-                  : "Have the AI write you a fresh scenario."
-            }
-            className="text-sm font-medium px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:border-stone-200 disabled:bg-stone-50 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
-          >
-            {generating ? "Generating…" : "✨ Generate"}
-          </button>
-          <button
-            onClick={loadNextQuestion}
-            disabled={loadingQuestion || submitting || generating}
-            className="text-sm text-indigo-700 hover:text-indigo-900 font-medium disabled:text-slate-400 flex items-center gap-1"
-          >
-            Next Scenario
-            <span aria-hidden>→</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="max-w-2xl w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FilterSelect
-          label="Content area"
-          value={contentFilter}
-          options={CONTENT_AREA_OPTIONS}
-          onChange={setContentFilter}
-        />
-        <FilterSelect
-          label="NCJMM step"
-          value={ncjmmFilter}
-          options={NCJMM_OPTIONS}
-          onChange={setNcjmmFilter}
-        />
-      </div>
-
-      {demoMode && (
-        <div className="max-w-2xl w-full bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-sm">
-          <strong>Demo mode.</strong> You&apos;re seeing built-in scenarios with
-          canned rationales. To get the AI preceptor and adaptive scoring,
-          connect Supabase (set{" "}
-          <code className="px-1 py-0.5 rounded bg-amber-100">
-            NEXT_PUBLIC_SUPABASE_URL
-          </code>{" "}
-          and{" "}
-          <code className="px-1 py-0.5 rounded bg-amber-100">
-            NEXT_PUBLIC_SUPABASE_ANON_KEY
-          </code>{" "}
-          in{" "}
-          <code className="px-1 py-0.5 rounded bg-amber-100">.env.local</code>,
-          run{" "}
-          <code className="px-1 py-0.5 rounded bg-amber-100">schema.sql</code> +{" "}
-          <code className="px-1 py-0.5 rounded bg-amber-100">seed.sql</code>,
-          and deploy the edge function).
-        </div>
-      )}
-
-      {error && (
-        <div className="max-w-2xl w-full bg-rose-50 border border-rose-200 text-rose-900 rounded-xl p-4 text-sm">
-          {error}
-        </div>
-      )}
-
-      {loadingQuestion && (
-        <div className="max-w-2xl w-full bg-white border border-stone-200 rounded-2xl p-6 text-slate-500">
-          Loading scenario…
-        </div>
-      )}
-
-      {question && !loadingQuestion && (
-        <>
-          <ClinicalVignette
-            clientType={question.clinical_scenarios.client_type}
-            vignette={question.clinical_scenarios.vignette}
-            vitals={question.clinical_scenarios.vitals}
-            labs={question.clinical_scenarios.labs ?? undefined}
-          />
-
-          <div className="max-w-2xl w-full">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                NCJMM Step
-              </span>
-              <span className="w-1 h-1 rounded-full bg-slate-300" />
-              <span className="text-xs font-semibold text-indigo-700">
-                {question.ncjmm_category}
-              </span>
-            </div>
-            <QuestionBlock
-              questionId={question.id}
-              questionText={question.question_text}
-              options={question.options}
-              multiSelect={question.question_type === "select_all"}
-              onSubmit={handleSubmit}
-              isLoading={submitting}
-            />
+    <main className="flex flex-1 flex-col items-center px-4 py-8 sm:py-10">
+      <div className="max-w-2xl w-full flex flex-col gap-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Clinical Judgment Practice
+            </h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              One scenario at a time. Pick the safest action.
+            </p>
           </div>
-
-          {result && (
+          {session.answered > 0 && (
             <div
-              className={`max-w-2xl w-full rounded-2xl border p-6 shadow-sm ${
-                result.isCorrect
-                  ? "bg-emerald-50 border-emerald-200"
-                  : "bg-amber-50 border-amber-200"
-              }`}
+              className="text-xs font-medium bg-white border border-stone-200 rounded-full px-3 py-1.5 text-slate-600 shadow-sm"
+              aria-live="polite"
             >
-              <div className="flex items-center gap-2 mb-3">
-                <span
-                  className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-sm ${
-                    result.isCorrect ? "bg-emerald-600" : "bg-amber-600"
-                  }`}
-                >
-                  {result.isCorrect ? "✓" : "!"}
-                </span>
-                <h3
-                  className={`text-lg font-semibold tracking-tight ${
-                    result.isCorrect ? "text-emerald-900" : "text-amber-900"
-                  }`}
-                >
-                  {result.isCorrect ? "Correct — well done." : "Not quite."}
-                </h3>
-              </div>
-              <p className="text-slate-800 mb-4 leading-relaxed">
-                {result.personalizedRationale}
-              </p>
-              <div className="border-t border-black/5 pt-3">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
-                  Clinical Insight
-                </div>
-                <p className="text-slate-700 text-sm leading-relaxed">
-                  {result.clinicalInsight}
-                </p>
-              </div>
+              This session: <span className="text-slate-900">{session.correct}/{session.answered}</span> · {accuracy}%
             </div>
           )}
-        </>
-      )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+          <FilterSelect label="Content area" value={contentFilter} options={CONTENT_AREA_OPTIONS} onChange={setContentFilter} />
+          <FilterSelect label="NCJMM step" value={ncjmmFilter} options={NCJMM_OPTIONS} onChange={setNcjmmFilter} />
+          {!demoMode && (
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={busy || !contentFilter || !ncjmmFilter}
+              title={!contentFilter || !ncjmmFilter ? "Pick a content area and an NCJMM step first." : "Have the AI write a fresh scenario."}
+              className="h-[42px] text-sm font-medium px-4 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:border-stone-200 disabled:bg-stone-50 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {generating ? "Writing…" : "✨ New AI scenario"}
+            </button>
+          )}
+        </div>
+
+        {demoMode && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-sm">
+            <strong>Practice mode.</strong> You&apos;re using the built-in question set with
+            written rationales. Progress isn&apos;t saved in this mode.
+          </div>
+        )}
+
+        {notice && (
+          <div className="bg-sky-50 border border-sky-200 text-sky-900 rounded-xl p-3 text-sm">{notice}</div>
+        )}
+
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-900 rounded-xl p-4 text-sm" role="alert">
+            {error}
+          </div>
+        )}
+
+        {(loadingQuestion || generating) && (
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 text-slate-500 animate-pulse">
+            {generating ? "The AI is writing a new scenario…" : "Loading scenario…"}
+          </div>
+        )}
+
+        {question && !loadingQuestion && !generating && (
+          <>
+            <ClinicalVignette
+              clientType={question.clinical_scenarios.client_type}
+              vignette={question.clinical_scenarios.vignette}
+              vitals={question.clinical_scenarios.vitals}
+              labs={question.clinical_scenarios.labs ?? undefined}
+            />
+
+            <div className="w-full">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">NCJMM step</span>
+                <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 rounded-full px-2.5 py-0.5">
+                  {question.ncjmm_category}
+                </span>
+                {question.clinical_scenarios.content_area && (
+                  <span className="text-xs font-medium text-slate-600 bg-stone-100 rounded-full px-2.5 py-0.5">
+                    {question.clinical_scenarios.content_area}
+                  </span>
+                )}
+              </div>
+              <QuestionBlock
+                key={question.id}
+                questionText={question.question_text}
+                options={question.options}
+                multiSelect={question.question_type === "select_all"}
+                onSubmit={handleSubmit}
+                isLoading={submitting}
+                revealedCorrectIds={result ? result.correctOptionIds : null}
+              />
+            </div>
+
+            {result && (
+              <div
+                className={`w-full rounded-2xl border p-5 sm:p-6 shadow-sm ${
+                  result.isCorrect ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"
+                }`}
+                aria-live="polite"
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <span
+                    className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-white font-bold text-sm ${
+                      result.isCorrect ? "bg-emerald-600" : "bg-amber-600"
+                    }`}
+                  >
+                    {result.isCorrect ? "✓" : "!"}
+                  </span>
+                  <h3 className={`text-lg font-semibold tracking-tight ${result.isCorrect ? "text-emerald-900" : "text-amber-900"}`}>
+                    {result.isCorrect ? "Correct — well done." : "Not quite."}
+                  </h3>
+                </div>
+                {result.personalizedRationale && (
+                  <p className="text-slate-800 mb-4 leading-relaxed">{result.personalizedRationale}</p>
+                )}
+                {result.clinicalInsight && (
+                  <div className="border-t border-black/5 pt-3">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Clinical insight</div>
+                    <p className="text-slate-700 text-sm leading-relaxed">{result.clinicalInsight}</p>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={loadNextQuestion}
+                  className="mt-5 w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-5 rounded-xl transition-colors"
+                >
+                  Next scenario <span aria-hidden>→</span>
+                </button>
+              </div>
+            )}
+
+            {!result && (
+              <button
+                type="button"
+                onClick={loadNextQuestion}
+                disabled={busy}
+                className="self-end text-sm text-indigo-700 hover:text-indigo-900 font-medium disabled:text-slate-400"
+              >
+                Skip this one →
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </main>
   );
 }
@@ -475,13 +461,11 @@ function FilterSelect({
 }) {
   return (
     <label className="flex flex-col text-sm">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">
-        {label}
-      </span>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1.5">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="bg-white border border-stone-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 cursor-pointer"
+        className="h-[42px] bg-white border border-stone-200 rounded-xl px-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 cursor-pointer"
       >
         <option value="">All</option>
         {options.map((o) => (

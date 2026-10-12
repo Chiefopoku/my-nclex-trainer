@@ -22,6 +22,15 @@ const CLIENT_NEEDS_BY_CONTENT: Record<string, string> = {
   'Therapeutic Communication': 'Psychosocial Integrity',
 };
 
+const NCJMM_STEPS = [
+  'Recognize Cues',
+  'Analyze Cues',
+  'Prioritize Hypotheses',
+  'Generate Solutions',
+  'Take Action',
+  'Evaluate Outcomes',
+];
+
 const SYSTEM_PROMPT = `You are an expert NCLEX-RN item writer. Generate an ORIGINAL clinical-judgment item aligned to the 2026 NCSBN test plan and the NCJMM. Do not reproduce items from any commercial question bank. The scenario and question must be your own.
 
 Include:
@@ -83,6 +92,38 @@ serve(async (req) => {
     if (!contentArea || !ncjmmCategory) {
       throw new Error('contentArea and ncjmmCategory required');
     }
+    if (!(contentArea in CLIENT_NEEDS_BY_CONTENT) || !NCJMM_STEPS.includes(ncjmmCategory)) {
+      throw new Error('Unknown content area or NCJMM step');
+    }
+
+    const admin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Only callers with a Supabase session (anonymous or signed in) may generate.
+    const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+    const { data: who } = token ? await admin.auth.getUser(token) : { data: { user: null } };
+    if (!who?.user) {
+      return new Response(JSON.stringify({ error: 'Sign-in session required' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Cost guard: cap AI generations across all users per hour.
+    const maxPerHour = Number(Deno.env.get('MAX_GENERATIONS_PER_HOUR') ?? 20);
+    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count } = await admin
+      .from('questions')
+      .select('id', { count: 'exact', head: true })
+      .gte('created_at', since);
+    if ((count ?? 0) >= maxPerHour) {
+      return new Response(JSON.stringify({ error: 'Hourly generation limit reached' }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const clientNeeds =
       CLIENT_NEEDS_BY_CONTENT[contentArea] ?? 'Physiological Integrity';
 
@@ -120,10 +161,7 @@ serve(async (req) => {
     const item = JSON.parse(text) as GeneratedItem;
     if (!isValid(item)) throw new Error('AI returned an invalid item shape');
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabase = admin;
 
     const { data: scenario, error: sErr } = await supabase
       .from('clinical_scenarios')
